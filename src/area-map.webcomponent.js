@@ -139,13 +139,25 @@ class AreaMap extends GhHtmlElement {
         loadAndDrawRectangles();
 
         const createPopup = (ne, sw, cityName) => {
-            return `
+            const container = document.createElement('div');
+
+            container.innerHTML = `
                 <b>City:</b> ${cityName}<br>
                 <b>North-East:</b> ${ne.lat}, ${ne.lng}<br>
                 <b>South-West:</b> ${sw.lat}, ${sw.lng}<br>
-                <button onclick="${this.saveRectangle(ne.lat, ne.lng, sw.lat, sw.lng, cityName)}">Save Rectangle</button>
             `;
-        }
+
+            const button = document.createElement('button');
+            button.textContent = 'Save Rectangle';
+
+            button.addEventListener('click', async () => {
+                await this.saveRectangle(ne.lat, ne.lng, sw.lat, sw.lng, cityName);
+            });
+
+            container.appendChild(button);
+
+            return container;
+        };
 
         async function getCityName(lat, lng) {
             let cityName = "Невідоме місце";
@@ -273,7 +285,6 @@ class AreaMap extends GhHtmlElement {
         }]
 
         await gudhub.addNewItems(this.appId, itemsList);
-        alert('Saved! Close popup')
     }
 
     onUpdate() {
