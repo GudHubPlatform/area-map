@@ -11,6 +11,8 @@ import './style.scss';
 class AreaMap extends GhHtmlElement {
     constructor() {
         super();
+
+        this.map = null;
     }
 
     onInit() {
@@ -28,6 +30,8 @@ class AreaMap extends GhHtmlElement {
 
     renderComponent() {
         const map = L.map('map').setView([53.678, -2.243], 6);
+        this.map = map;
+
         const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
@@ -63,26 +67,6 @@ class AreaMap extends GhHtmlElement {
         });
         map.addControl(drawControl);
 
-        function createRectangleFromAPI(data) {
-            const [neLatStr, neLngStr] = data.north_east.split(', ');
-            const [swLatStr, swLngStr] = data.south_west.split(', ');
-
-            const neLat = parseFloat(neLatStr);
-            const neLng = parseFloat(neLngStr);
-            const swLat = parseFloat(swLatStr);
-            const swLng = parseFloat(swLngStr);
-
-            return L.rectangle([
-                [swLat, swLng],
-                [neLat, neLng]
-            ], {
-                color: "#FF0000",
-                weight: 2,
-                fillColor: "#FF0000",
-                fillOpacity: 0.35
-            });
-        }
-
         const loadAndDrawRectangles = async () => {
             try {
                 const data = await gudhub.jsonConstructor(
@@ -101,36 +85,7 @@ class AreaMap extends GhHtmlElement {
                     }
                 );
 
-                data.rectangles.forEach(rectData => {
-                    const rectangle = createRectangleFromAPI(rectData);
-                    rectangle.addTo(map);
-
-                    rectangle.addEventListener('mouseover', () => {
-                        const container = document.createElement('div');
-                        container.classList.add('view-container');
-                        const template = angular.element(`<gh-view app-id="${this.appId}" item-id="${rectData.item_id}" view-id="${this.viewFieldId}"></gh-view>`);
-                        this.renderAngularElement(container, template);
-                        rectangle.bindPopup(container, { minWidth: 350 }).openPopup();
-                    });
-
-                    rectangle.addEventListener('mouseout', () => {
-                        rectangle.closePopup();
-                    });
-
-                    rectangle.addEventListener('click', () => {
-                        const injector = angular.element(document.querySelector('body')).injector();
-                        const $location = injector.get('$location');
-                        const $rootScope = injector.get('$rootScope');
-                        const $scope = $rootScope.$new(true);
-
-                        $location.path(
-                            'act/open_item/' + this.appId + '/' + this.clickFieldId + '/' + rectData.item_id
-                        );
-                        $scope.$apply();
-
-                    });
-
-                });
+                data.rectangles.forEach(rectData => this.attachRectangleToMap(map, rectData));
             } catch (error) {
                 console.error('Помилка завантаження даних:', error);
             }
@@ -138,7 +93,7 @@ class AreaMap extends GhHtmlElement {
 
         loadAndDrawRectangles();
 
-        const createPopup = (ne, sw, cityName) => {
+        const createPopup = (layer, ne, sw, cityName) => {
             const container = document.createElement('div');
 
             container.innerHTML = `
@@ -152,6 +107,12 @@ class AreaMap extends GhHtmlElement {
 
             button.addEventListener('click', async () => {
                 await this.saveRectangle(ne.lat, ne.lng, sw.lat, sw.lng, cityName);
+
+                layer.closePopup();
+                layer.unbindPopup();
+                layer.setStyle({
+                    fillOpacity: 0
+                });
             });
 
             container.appendChild(button);
@@ -214,7 +175,7 @@ class AreaMap extends GhHtmlElement {
                 const sw = bounds.getSouthWest();
 
                 let cityName = await getCityName(ne.lat, sw.lng);
-                const contentString = createPopup(ne, sw, cityName);
+                const contentString = createPopup(rectangle, ne, sw, cityName);
 
                 layer.bindPopup(contentString);
             }
@@ -228,7 +189,7 @@ class AreaMap extends GhHtmlElement {
                 const sw = bounds.getSouthWest();
 
                 let cityName = await getCityName(ne.lat, sw.lng);
-                const contentString = createPopup(ne, sw, cityName);
+                const contentString = createPopup(rectangle, ne, sw, cityName);
                 layer.bindPopup(contentString);
             });
         });
@@ -259,9 +220,58 @@ class AreaMap extends GhHtmlElement {
             const sw = bounds.getSouthWest();
 
             let cityName = await getCityName(e.latlng.lat, e.latlng.lng);
-            const contentString = createPopup(ne, sw, cityName);
 
-            rectangle.bindPopup(contentString).openPopup();
+            const popupContent = createPopup(rectangle, ne, sw, cityName);
+            rectangle.bindPopup(popupContent).openPopup();
+        });
+    }
+
+    createRectangleFromAPI(data) {
+        const [neLatStr, neLngStr] = data.north_east.split(', ');
+        const [swLatStr, swLngStr] = data.south_west.split(', ');
+
+        const neLat = parseFloat(neLatStr);
+        const neLng = parseFloat(neLngStr);
+        const swLat = parseFloat(swLatStr);
+        const swLng = parseFloat(swLngStr);
+
+        return L.rectangle([
+            [swLat, swLng],
+            [neLat, neLng]
+        ], {
+            color: "#FF0000",
+            weight: 2,
+            fillColor: "#FF0000",
+            fillOpacity: 0.35
+        });
+    }
+
+    attachRectangleToMap = (map, rectData) => {
+        const rectangle = this.createRectangleFromAPI(rectData);
+        rectangle.addTo(map);
+
+        rectangle.addEventListener('mouseover', () => {
+            const container = document.createElement('div');
+            container.classList.add('view-container');
+            const template = angular.element(`<gh-view app-id="${this.appId}" item-id="${rectData.item_id}" view-id="${this.viewFieldId}"></gh-view>`);
+            this.renderAngularElement(container, template);
+            rectangle.bindPopup(container, { minWidth: 350 }).openPopup();
+        });
+
+        rectangle.addEventListener('mouseout', () => {
+            rectangle.closePopup();
+        });
+
+        rectangle.addEventListener('click', () => {
+            const injector = angular.element(document.querySelector('body')).injector();
+            const $location = injector.get('$location');
+            const $rootScope = injector.get('$rootScope');
+            const $scope = $rootScope.$new(true);
+
+            $location.path(
+                'act/open_item/' + this.appId + '/' + this.clickFieldId + '/' + rectData.item_id
+            );
+            $scope.$apply();
         });
     }
 
@@ -282,9 +292,18 @@ class AreaMap extends GhHtmlElement {
                     "field_value": cityName,
                 },
             ]
-        }]
+        }];
 
-        await gudhub.addNewItems(this.appId, itemsList);
+        const res = await gudhub.addNewItems(this.appId, itemsList);
+
+        const newRectangleData = {
+            area_name: cityName,
+            item_id: res[0]?.item_id,
+            north_east: `${neLat}, ${neLng}`,
+            south_west: `${swLat}, ${swLng}`
+        };
+
+        this.attachRectangleToMap(this.map, newRectangleData);
     }
 
     onUpdate() {
