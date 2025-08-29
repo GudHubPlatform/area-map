@@ -104,8 +104,11 @@ class AreaMap extends GhHtmlElement {
 
             const button = document.createElement('button');
             button.textContent = 'Save Rectangle';
-
             button.addEventListener('click', async () => {
+                const bounds = layer.getBounds();
+                const ne = bounds.getNorthEast();
+                const sw = bounds.getSouthWest();
+
                 await this.saveRectangle(ne.lat, ne.lng, sw.lat, sw.lng, cityName);
 
                 layer.closePopup();
@@ -175,7 +178,7 @@ class AreaMap extends GhHtmlElement {
                 const sw = bounds.getSouthWest();
 
                 let cityName = await getCityName(ne.lat, sw.lng);
-                const contentString = createPopup(rectangle, ne, sw, cityName);
+                const contentString = createPopup(layer, ne, sw, cityName);
 
                 layer.bindPopup(contentString);
             }
@@ -189,7 +192,7 @@ class AreaMap extends GhHtmlElement {
                 const sw = bounds.getSouthWest();
 
                 let cityName = await getCityName(ne.lat, sw.lng);
-                const contentString = createPopup(rectangle, ne, sw, cityName);
+                const contentString = createPopup(layer, ne, sw, cityName);
                 layer.bindPopup(contentString);
             });
         });
